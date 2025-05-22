@@ -3,6 +3,9 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
+from reportlab.platypus import Table, TableStyle, Paragraph
+from reportlab.lib import colors
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from io import BytesIO
 import requests
 from datetime import datetime
@@ -25,113 +28,176 @@ def create_amphibian_pdf(data):
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
-    c.setTitle(safe_get(data, ['species', 'scientificName'], 'Registro'))
-
-    c.setFont('Helvetica-Bold', 24)
-    c.drawCentredString(width/2, height-150, "Registro de Especimen")
+    
+    # Estilos de texto
+    styles = getSampleStyleSheet()
+    italic_style = ParagraphStyle('Italic', parent=styles['Normal'], fontName='Helvetica-Oblique')
+    bold_style = ParagraphStyle('Bold', parent=styles['Normal'], fontName='Helvetica-Bold')
+    header_style = ParagraphStyle('Header', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=14, spaceAfter=12)
+    section_style = ParagraphStyle('Section', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=12, spaceAfter=8)
+    
+    # PORTADA
+    c.setFont('Helvetica-Bold', 36)
+    c.drawCentredString(width/2, height/2 + 100, "REGISTRO DE ESPECIMEN")
+    
+    scientific_name = safe_get(data, ['species', 'scientificName'], 'N/A')
+    p_scientific = Paragraph(f'<i>{scientific_name}</i>', italic_style)
+    p_scientific.wrapOn(c, width-2*inch, 50)
+    p_scientific.drawOn(c, (width - p_scientific.width)/2, height/2)
+    
     c.setFont('Helvetica', 18)
-    c.drawCentredString(width/2, height-200, safe_get(data, ['species', 'scientificName'], 'N/A'))
-
-    c.setFont('Helvetica', 14)
-    c.drawCentredString(width/2, height-250, f"Código: {data.get('code', 'N/A')}")
-    c.drawCentredString(width/2, height-280, f"Fecha de Identificación: {data.get('identDate', 'N/A')}")
-    museum = data.get('museum')
-    if museum:
-        c.drawCentredString(width/2, height-310, f"Museo: {museum.get('name', '')} ({museum.get('acronym','')})")
-
-    c.setFont('Helvetica', 10)
+    c.drawCentredString(width/2, height/2 - 50, f"Código: {data.get('code', 'N/A')}")
+    
+    museum = data.get('museum', {})
+    museum_info = f"{museum.get('name', '')} ({museum.get('acronym','')})" if museum else ""
+    c.setFont('Helvetica', 16)
+    c.drawCentredString(width/2, height/2 - 100, museum_info)
+    
+    c.setFont('Helvetica', 12)
     c.drawCentredString(width/2, 50, f"Generado el: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     c.showPage()
 
-    c.setFont('Helvetica-Bold', 16)
-    c.drawString(1*inch, height-1*inch, "Información del Espécimen")
-    c.line(1*inch, height-1*inch-5, width-1*inch, height-1*inch-5)
-    y = height - 1.2*inch
-    c.setFont('Helvetica', 12)
-
+    # INFORMACIÓN GENERAL
+    y = height - inch
+    p_title = Paragraph("INFORMACIÓN DEL ESPÉCIMEN", header_style)
+    p_title.wrapOn(c, width-2*inch, 50)
+    p_title.drawOn(c, inch, y)
+    y -= 30
+    
+    # Tabla de información general
     sexo_nombre = safe_get(data, ['sex', 'name'], 'N/A')
     actividad_nombre = safe_get(data, ['activity', 'name'], 'N/A')
     bosque_nombre = safe_get(data, ['forestType', 'name'], 'N/A')
-
-    info = [
-        f"Código: {data.get('code', 'N/A')}",
-        f"Nombre Científico: {safe_get(data, ['species', 'scientificName'], 'N/A')}",
-        f"Nombre Común: {safe_get(data, ['species', 'commonName'], 'N/A')}",
-        f"Sexo: {sexo_nombre}",
-        f"Fecha de Identificación: {data.get('identDate', 'N/A')} {data.get('identTime', '')}",
-        f"Actividad: {actividad_nombre}",
-        f"Tipo de Bosque: {bosque_nombre}"
+    
+    info_data = [
+        ["Código:", data.get('code', 'N/A')],
+        ["Nombre Científico:", Paragraph(f'<i>{scientific_name}</i>', italic_style)],
+        ["Nombre Común:", safe_get(data, ['species', 'commonName'], 'N/A')],
+        ["Sexo:", sexo_nombre],
+        ["Fecha Identificación:", f"{data.get('identDate', 'N/A')} {data.get('identTime', '')}"],
+        ["Actividad:", actividad_nombre],
+        ["Tipo de Bosque:", bosque_nombre]
     ]
-    for l in info:
-        c.drawString(1*inch, y, l)
-        y -= 20
-    y -= 20
-
-    c.setFont('Helvetica-Bold', 14)
-    c.drawString(1*inch, y, "Clasificación Taxonómica:")
-    y -= 20
+    
+    info_table = Table(info_data, colWidths=[2*inch, 4*inch])
+    info_table.setStyle(TableStyle([
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('ALIGN', (0,0), (0,-1), 'RIGHT'),
+        ('ALIGN', (1,0), (1,-1), 'LEFT'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+    ]))
+    
+    info_table.wrapOn(c, width-2*inch, height)
+    info_table.drawOn(c, inch, y - info_table._height)
+    y -= info_table._height + 30
+    
+    # CLASIFICACIÓN TAXONÓMICA
+    p_section = Paragraph("CLASIFICACIÓN TAXONÓMICA", header_style)
+    p_section.wrapOn(c, width-2*inch, 50)
+    p_section.drawOn(c, inch, y)
+    y -= 30
+    
+    # Tabla taxonómica
     cls = safe_get(data, ['species', 'genus', 'family', 'order', 'class'], {})
-    clase_nombre = cls.get('name', 'N/A')
-    orden_nombre = safe_get(data, ['species', 'genus', 'family', 'order', 'name'], 'N/A')
-    familia_nombre = safe_get(data, ['species', 'genus', 'family', 'name'], 'N/A')
-    genero_nombre = safe_get(data, ['species', 'genus', 'name'], 'N/A')
-
-    tax = [
-        f"Clase: {clase_nombre}",
-        f"Orden: {orden_nombre}",
-        f"Familia: {familia_nombre}",
-        f"Género: {genero_nombre}"
+    tax_data = [
+        ["Clase:", cls.get('name', 'N/A')],
+        ["Orden:", safe_get(data, ['species', 'genus', 'family', 'order', 'name'], 'N/A')],
+        ["Familia:", safe_get(data, ['species', 'genus', 'family', 'name'], 'N/A')],
+        ["Género:", safe_get(data, ['species', 'genus', 'name'], 'N/A')],
+        ["Especie:", Paragraph(f'<i>{scientific_name}</i>', italic_style)]
     ]
-    for l in tax:
-        c.drawString(1.2*inch, y, l)
-        y -= 20
-    y -= 20
-
-    c.setFont('Helvetica-Bold', 14)
-    c.drawString(1*inch, y, "Ubicación Geográfica:")
-    y -= 20
+    
+    tax_table = Table(tax_data, colWidths=[1.5*inch, 4.5*inch])
+    tax_table.setStyle(TableStyle([
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('ALIGN', (0,0), (0,-1), 'RIGHT'),
+        ('ALIGN', (1,0), (1,-1), 'LEFT'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+    ]))
+    
+    tax_table.wrapOn(c, width-2*inch, height)
+    tax_table.drawOn(c, inch, y - tax_table._height)
+    y -= tax_table._height + 30
+    
+    # UBICACIÓN GEOGRÁFICA
+    p_section = Paragraph("UBICACIÓN GEOGRÁFICA", header_style)
+    p_section.wrapOn(c, width-2*inch, 50)
+    p_section.drawOn(c, inch, y)
+    y -= 30
+    
+    # Tabla de ubicación
     ev = safe_get(data, ['ocurrence', 'event'], {})
     loc = ev.get('locality', {})
     dist = loc.get('district', {})
     prov = dist.get('province', {})
     dept = prov.get('department', {})
     country = dept.get('country', {})
-
-    locs = [
-        f"Localidad: {loc.get('name', 'N/A')}",
-        f"Distrito: {dist.get('name', 'N/A')}",
-        f"Provincia: {prov.get('name', 'N/A')}",
-        f"Departamento: {dept.get('name', 'N/A')}",
-        f"País: {country.get('name', 'N/A')}",
-        f"Coordenadas: Lat {ev.get('latitude', 'N/A')}, Long {ev.get('longitude', 'N/A')}"
+    
+    loc_data = [
+        ["País:", country.get('name', 'N/A')],
+        ["Departamento:", dept.get('name', 'N/A')],
+        ["Provincia:", prov.get('name', 'N/A')],
+        ["Distrito:", dist.get('name', 'N/A')],
+        ["Localidad:", loc.get('name', 'N/A')],
+        ["Coordenadas:", f"Lat {ev.get('latitude', 'N/A')}, Long {ev.get('longitude', 'N/A')}"]
     ]
-    for l in locs:
-        c.drawString(1.2*inch, y, l)
-        y -= 20
-    y -= 20
-
-    identifiers = data.get('identifiers')
+    
+    loc_table = Table(loc_data, colWidths=[1.5*inch, 4.5*inch])
+    loc_table.setStyle(TableStyle([
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('ALIGN', (0,0), (0,-1), 'RIGHT'),
+        ('ALIGN', (1,0), (1,-1), 'LEFT'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+    ]))
+    
+    loc_table.wrapOn(c, width-2*inch, height)
+    loc_table.drawOn(c, inch, y - loc_table._height)
+    y -= loc_table._height + 30
+    
+    # IDENTIFICADORES
+    identifiers = data.get('identifiers', [])
     if identifiers:
-        c.setFont('Helvetica-Bold', 14)
-        c.drawString(1*inch, y, "Identificadores:")
-        y -= 20
-        c.setFont('Helvetica', 12)
+        p_section = Paragraph("IDENTIFICADORES", header_style)
+        p_section.wrapOn(c, width-2*inch, 50)
+        p_section.drawOn(c, inch, y)
+        y -= 30
+        
+        id_data = []
         for idf in identifiers:
             p = idf.get('person', {})
-            line = f"{p.get('firstname', '')} {p.get('lastname', '')}".strip()
-            if p.get('email'):
-                line += f" | Email: {p['email']}"
-            c.drawString(1.2*inch, y, line)
-            y -= 20
-
+            name = f"{p.get('firstname', '')} {p.get('lastname', '')}".strip()
+            email = p.get('email', '')
+            id_data.append([name, email])
+        
+        id_table = Table(id_data, colWidths=[3*inch, 3*inch])
+        id_table.setStyle(TableStyle([
+            ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+            ('FONTSIZE', (0,0), (-1,-1), 10),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ]))
+        
+        id_table.wrapOn(c, width-2*inch, height)
+        id_table.drawOn(c, inch, y - id_table._height)
+        y -= id_table._height + 30
+    
+    # IMÁGENES
     imgs = safe_get(data, ['files', 'images'], [])
     if imgs:
         c.showPage()
-        y = height - 1*inch
-        c.setFont('Helvetica-Bold', 16)
-        c.drawString(1*inch, y, "Imágenes del Especimen")
-        c.line(1*inch, y-5, width-1*inch, y-5)
+        y = height - inch
+        p_title = Paragraph("IMÁGENES DEL ESPÉCIMEN", header_style)
+        p_title.wrapOn(c, width-2*inch, 50)
+        p_title.drawOn(c, inch, y)
         y -= 30
+        
         for im in imgs:
             try:
                 r = requests.get(im['name'], timeout=10)
@@ -140,35 +206,48 @@ def create_amphibian_pdf(data):
                 with PILImage.open(buf) as img:
                     iw, ih = img.size
                     ar = iw/ih
-                    dw = min(5*inch, iw)
+                    dw = width - 2*inch  # Usar todo el ancho disponible
                     dh = dw/ar
-                    if y - dh - 50 < 0.5*inch:
+                    
+                    if y - dh - 100 < 0.5*inch:  # Verificar espacio en página
                         c.showPage()
-                        y = height - 1*inch
-                        c.setFont('Helvetica-Bold', 16)
-                        c.drawString(1*inch, y, "Imágenes del Especimen (cont.)")
+                        y = height - inch
+                        p_title = Paragraph("IMÁGENES DEL ESPÉCIMEN (cont.)", header_style)
+                        p_title.wrapOn(c, width-2*inch, 50)
+                        p_title.drawOn(c, inch, y)
                         y -= 30
-                    c.setFont('Helvetica-Bold', 12)
-                    c.drawString(1*inch, y, f"Imagen {im.get('order', '')}")
-                    y -= 15
-                    c.setFont('Helvetica', 10)
-                    meta = f"Formato: {im.get('format','')}"
-                    if im.get('size'): meta += f" | Tamaño: {im['size']} bytes"
-                    if im.get('note'): meta += f" | Nota: {im['note']}"
-                    c.drawString(1*inch, y, meta)
-                    y -= 15
+                    
+                    # Título de la imagen
+                    p_img_title = Paragraph(f"<b>Imagen {im.get('order', '')}</b>", section_style)
+                    p_img_title.wrapOn(c, width-2*inch, 50)
+                    p_img_title.drawOn(c, inch, y)
+                    y -= 20
+                    
+                    # Metadatos
+                    meta = []
+                    if im.get('format'): meta.append(f"Formato: {im['format']}")
+                    if im.get('size'): meta.append(f"Tamaño: {im['size']} bytes")
+                    if im.get('note'): meta.append(f"Nota: {im['note']}")
+                    
+                    if meta:
+                        c.setFont('Helvetica', 9)
+                        c.drawString(inch, y, " | ".join(meta))
+                        y -= 20
+                    
+                    # Dibujar imagen
                     buf.seek(0)
                     image = ImageReader(buf)
-                    c.drawImage(image, (width-dw)/2, y-dh, width=dw, height=dh, preserveAspectRatio=True)
-                    y -= dh + 20
+                    c.drawImage(image, inch, y-dh, width=dw, height=dh, preserveAspectRatio=True)
+                    y -= dh + 40
+                    
             except Exception as e:
                 c.setFont('Helvetica', 10)
-                c.drawString(1*inch, y, f"Error al cargar imagen: {e}")
+                c.drawString(inch, y, f"Error al cargar imagen: {e}")
                 y -= 20
 
     c.save()
     buffer.seek(0)
-    return buffer
+    return buffer, scientific_name.replace(" ", "_")
 
 @app.route('/generate-pdf-from-data', methods=['POST'])
 def generate_pdf_from_data():
@@ -176,10 +255,11 @@ def generate_pdf_from_data():
         data = request.get_json(force=True)
         if not data:
             return jsonify({"error": "No se recibió contenido JSON"}), 400
-        pdf = create_amphibian_pdf(data)
+        
+        pdf, filename = create_amphibian_pdf(data)
         response = make_response(pdf.read())
         response.headers.set('Content-Type', 'application/pdf')
-        response.headers.set('Content-Disposition', 'inline; filename=registro.pdf')
+        response.headers.set('Content-Disposition', f'attachment; filename=registro_{filename}.pdf')
         return response
     except Exception as e:
         return jsonify({"error": f"Error al generar PDF: {e}"}), 500
