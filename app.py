@@ -12,7 +12,7 @@ from PIL import Image as PILImage
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "http://localhost:9000"}})
+CORS(app, resources={r"/*": {"origins": "*"}}
 
 API_BASE = 'https://api.vertebrados.iiap.gob.pe/api/v1/individuals/'
 
