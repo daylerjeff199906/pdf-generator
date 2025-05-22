@@ -54,10 +54,11 @@ def create_amphibian_pdf(data):
     code = data.get('code', 'N/A')
     
       # PORTADA MEJORADA
-    c.setFont('Helvetica-Bold', 24)
+    c.setFont('Helvetica-Bold', 40)
     c.drawCentredString(width/2, height/2 + 80, "GUÍA DE ESPECIE")
     
-    c.setFont('Helvetica', 20)
+    c.setFont('Helvetica', 30)
+    c.setFont('Helvetica-Oblique', 30)
     c.drawCentredString(width/2, height/2 + 40, scientific_name)
     c.drawCentredString(width/2, height/2, common_name)
     
@@ -123,13 +124,25 @@ def create_amphibian_pdf(data):
     dept = prov.get('department', {})
     country = dept.get('country', {})
     
+    # Obtener y redondear coordenadas a 5 decimales
+    lat = ev.get('latitude', 'N/A')
+    lon = ev.get('longitude', 'N/A')
+    try:
+        lat_str = f"{float(lat):.5f}"
+    except (TypeError, ValueError):
+        lat_str = 'N/A'
+    try:
+        lon_str = f"{float(lon):.5f}"
+    except (TypeError, ValueError):
+        lon_str = 'N/A'
+
     loc_data = [
         ["País:", country.get('name', 'N/A')],
         ["Departamento:", dept.get('name', 'N/A')],
         ["Provincia:", prov.get('name', 'N/A')],
         ["Distrito:", dist.get('name', 'N/A')],
         ["Localidad:", loc.get('name', 'N/A')],
-        ["Coordenadas:", f"Lat {ev.get('latitude', 'N/A')}, Long {ev.get('longitude', 'N/A')}"]
+        ["Coordenadas:", f"Lat {lat_str}, Long {lon_str}"]
     ]
     
     loc_table = create_table(loc_data, [1.5*inch, 4.5*inch])
@@ -166,7 +179,6 @@ def create_amphibian_pdf(data):
         id_table.drawOn(c, 1*inch, y - id_table._height)
         y -= id_table._height + 20
     
-    # IMÁGENES (una debajo de otra con su información)
  # IMÁGENES MEJORADAS (mitad superior e inferior)
     imgs = safe_get(data, ['files', 'images'], [])
     if imgs:
@@ -220,23 +232,20 @@ def create_amphibian_pdf(data):
                     c.setFont('Helvetica-Bold', 12)
                     c.drawString(1*inch, y_position + img_area_height - 20, section_label)
                     
-                    # Dibujar metadatos
-                    c.setFont('Helvetica', 10)
-                    meta_parts = []
-                    if im.get('format'): meta_parts.append(f"Formato: {im['format']}")
-                    if im.get('size'): meta_parts.append(f"Tamaño: {im['size']} bytes")
-                    if im.get('note'): meta_parts.append(f"Nota: {im['note']}")
-                    
-                    if meta_parts:
-                        meta_text = " | ".join(meta_parts)
-                        c.drawString(1*inch, y_position + img_area_height - 40, meta_text)
-                    
                     # Dibujar imagen centrada horizontalmente
                     x_position = (width - dw) / 2
                     buf.seek(0)
                     image = ImageReader(buf)
-                    c.drawImage(image, x_position, y_position + img_area_height - 40 - dh, 
-                              width=dw, height=dh, preserveAspectRatio=True)
+                    image_top = y_position + img_area_height - 40
+                    c.drawImage(image, x_position, image_top - dh, 
+                                width=dw, height=dh, preserveAspectRatio=True)
+                    
+                    # Dibujar nota debajo de la imagen (8px ≈ 6 puntos)
+                    nota = im.get('note', '')
+                    if nota:
+                        c.setFont('Helvetica', 10)
+                        nota_y = image_top - dh - 6  # 6 puntos debajo de la imagen
+                        c.drawString(1*inch, nota_y, nota)
                     
             except Exception as e:
                 c.setFont('Helvetica', 10)
@@ -244,9 +253,9 @@ def create_amphibian_pdf(data):
                 c.drawString(1*inch, error_y + img_area_height - 20, f"Error al cargar imagen {i+1}: {str(e)}")
 
     c.save()
-    buffer.seek(0)
-    # Nombre del archivo con el nombre científico
+        # Nombre del archivo con el nombre científico
     filename = f"guia_especie_{scientific_name.replace(' ', '_')}.pdf"
+    buffer.seek(0)
     return buffer, filename
 
 @app.route('/generate-pdf-from-data', methods=['POST'])
