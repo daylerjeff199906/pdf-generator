@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de PDF para Anfibios/Reptiles</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        .container {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .example {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #eaf2f8;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Generador de PDF para Anfibios/Reptiles</h1>
+        <p>Ingresa los datos en formato JSON para generar el PDF:</p>
+        
+        <textarea id="json-data" placeholder='Pega aquí tus datos JSON...'></textarea>
+        
+        <button onclick="generatePDF()">Generar PDF</button>
+        
+        <div class="example">
+            <h3>Ejemplo de estructura JSON:</h3>
+            <pre>{
+  "code": "GGU6321",
+  "identDate": "2017-06-13",
+  "sex": {"name": "Macho?"},
+  "species": {
+    "scientificName": "Ranitomeya reticulata",
+    "commonName": "reticulata",
+    "genus": {
+      "name": "Ranitomeya",
+      "family": {
+        "name": "Dendrobatidae",
+        "order": {
+          "name": "Anura",
+          "class": {"name": "Amphibia"}
+        }
+      }
+    }
+  },
+  "museum": {"name": "Colección Referencial", "acronym": "CRVIIAP"},
+  "activity": {"name": "Posición de ataque"},
+  "forestType": {"name": "Bosque de tierra firme"},
+  "ocurrence": {
+    "event": {
+      "latitude": "-3.937836",
+      "longitude": "-73.445098",
+      "locality": {
+        "name": "Estación Biológica José Álvarez Alonso",
+        "district": {
+          "name": "San Juan Bautista",
+          "province": {"name": "Maynas"},
+          "department": {"name": "Loreto"},
+          "country": {"name": "Perú"}
+        }
+      }
+    }
+  },
+  "files": {
+    "audios": [
+      {
+        "order": 1,
+        "note": "Audio de prueba",
+        "format": ".ogg",
+        "size": 5898,
+        "samplingSite": "EN_ESTUDIO",
+        "histograms": [
+          {
+            "order": 1,
+            "name": "URL_DE_IMAGEN",
+            "format": ".png",
+            "size": 2810255
+          }
+        ]
+      }
+    ]
+  }
+}</pre>
+        </div>
+    </div>
+
+    <script>
+        async function generatePDF() {
+            const jsonData = document.getElementById('json-data').value;
+            
+            try {
+                const data = JSON.parse(jsonData);
+                
+                const response = await fetch('/generate-pdf', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `registro_${data.code || 'especimen'}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                } else {
+                    const error = await response.json();
+                    alert(`Error: ${error.error}`);
+                }
+            } catch (e) {
+                alert(`Error al procesar JSON: ${e.message}`);
+            }
+        }
+    </script>
+</body>
+</html>
